@@ -1,5 +1,5 @@
 <%- partial('_pre') %>
-<section class="widget <%- item.class %> <%- page.widget_style %> <%- page.widget_platform %> <%- page.widget_pjax %>">
+<section class="widget <%- item.class %> <%- page.widget_platform %> <%- page.widget_pjax %>">
   <div class='content'>
     <% if (item.avatar) { %>
       <% if (item.url) { %>
@@ -28,7 +28,7 @@
     <% } %>
     <% if (item.social && item.social.length > 0) { %>
       <div class="social-wrapper">
-        <% (item.social||[]).forEach(function(value){ %>
+        <% getList(item.social).forEach(function(value){ %>
           <% if (value.url && (value.icon || value.img || value.avatar)) { %>
             <a href="<%= url_for(value.url) %>"
               class="social <%- value.icon %> flat-btn"

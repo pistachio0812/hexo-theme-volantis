@@ -29,10 +29,10 @@ const locationHash = () => {
     if (target) {
       setTimeout(() => {
         if (window.location.hash.startsWith('#fn')) { // hexo-reference https://github.com/volantis-x/hexo-theme-volantis/issues/647
-          volantis.scroll.to(target, { addTop: - volantis.dom.header.offsetHeight - 5, behavior: 'instant' })
+          volantis.scroll.to(target, { addTop: - volantis.dom.header.offsetHeight - 5, behavior: 'instant', observer: true })
         } else {
           // 锚点中上半部有大片空白 高度大概是 volantis.dom.header.offsetHeight
-          volantis.scroll.to(target, { addTop: 5, behavior: 'instant' })
+          volantis.scroll.to(target, { addTop: 5, behavior: 'instant', observer: true })
         }
       }, 1000)
     }
@@ -67,9 +67,18 @@ const VolantisApp = (() => {
   }
 
   fn.event = () => {
-    volantis.dom.$(document.getElementById("scroll-down")).on('click', function () {
+    volantis.dom.$(document.getElementById("scroll-down"))?.on('click', function () {
       fn.scrolltoElement(volantis.dom.bodyAnchor);
     });
+
+    // 如果 sidebar 为空，隐藏 sidebar。
+    const sidebar = document.querySelector("#l_side")
+    if (sidebar) {
+      const sectionList = sidebar.querySelectorAll("section")
+      if (!sectionList.length) {
+        document.querySelector("#l_main").classList.add("no_sidebar")
+      }
+    }
 
     // 站点信息 最后活动日期
     if (volantis.GLOBAL_CONFIG.sidebar.for_page.includes('webinfo') || volantis.GLOBAL_CONFIG.sidebar.for_post.includes('webinfo')) {
@@ -191,7 +200,7 @@ const VolantisApp = (() => {
     if (!pdata.ispage) return;
 
     // 填充二级导航文章标题 【移动端 PC】
-    volantis.dom.wrapper.find('.nav-sub .title').html(pdata.postTitle);
+    volantis.dom.wrapper.find('.nav-sub .title').html(document.title.split(" - ")[0]);
 
     // ====== bind events to every btn =========
     // 评论按钮 【移动端 PC】
@@ -276,31 +285,73 @@ const VolantisApp = (() => {
   fn.setGlobalHeaderMenuEvent = () => {
     if (volantis.isMobile) {
       // 【移动端】 关闭已经展开的子菜单 点击展开子菜单
-      document.querySelectorAll('#l_header .m-phone li').forEach(function (e) {
-        if (e.querySelector(".list-v")) {
+      document.querySelectorAll('#l_header .m-phone li').forEach(function (_e) {
+        if (_e.querySelector(".list-v")) {
           // 点击菜单
-          volantis.dom.$(e).click(function (e) {
+          volantis.dom.$(_e).click(function (e) {  
             e.stopPropagation();
-            // 关闭已经展开的子菜单
-            e.currentTarget.parentElement.childNodes.forEach(function (e) {
-              if (Object.prototype.toString.call(e) == '[object HTMLLIElement]') {
-                e.childNodes.forEach(function (e) {
-                  if (Object.prototype.toString.call(e) == '[object HTMLUListElement]') {
-                    volantis.dom.$(e).hide()
+            let menuType = ''
+            // 关闭.menu-phone
+            Array.from(e.currentTarget.children).some(val => {
+              if(val.classList.contains('s-menu')) {
+                menuType = 'menu' // 代表点击的是一级菜单外层的icon
+                return
+              }
+              if(val.classList.contains('menuitem')) {
+                menuType = 'item' // 点击的是下拉一级菜单
+                return
+              }
+            })
+            if(menuType === 'item') {
+              // 关闭已经展开的子菜单, 这一步是针对点击多个拥有二级子菜单的一级菜单，关闭其他所有一级菜单的二级菜单
+              // ①
+              e.currentTarget.parentElement.childNodes.forEach(function (e2) {
+                if (Object.prototype.toString.call(e2) == '[object HTMLLIElement]') {
+                  e2.childNodes.forEach(function (e1) {
+                    if (Object.prototype.toString.call(e1) == '[object HTMLUListElement]') {
+                      volantis.dom.$(e1).hide()
+                    }
+                  })
+                }
+              })
+              // 点击展开二级子菜单
+
+              /* 
+                由于采用事件委托，因此此处点击， 两种情况，currentTarget指向菜单按钮a.s-menu和ul的共同父元素li， 第二，指向ul中的li元素，也就是子菜单
+                区分：情况一的第一个子元素a的类名是s-menu；情况二的子元素a的类名为menuitem
+                我们要点击外部的menu icon时要关闭的是.menu-phone而不是.menuitem
+              */
+              let array = e.currentTarget.children
+              for (let index = 0; index < array.length; index++) {
+                const element = array[index];
+                if (volantis.dom.$(element).title === 'menu') { // 移动端菜单栏异常
+                  volantis.dom.$(element).style.display = "flex"      // https://github.com/volantis-x/hexo-theme-volantis/issues/706
+                } else {
+                  volantis.dom.$(element).show()
+                }
+              }
+            } else {  
+              let menuPhone = document.querySelector('.switcher .menu-phone')
+              let isHiding = window.getComputedStyle(menuPhone).display === 'none'
+              if(isHiding) {
+                volantis.dom.$(menuPhone).show()
+              } else {
+                volantis.dom.$(menuPhone).hide()
+                // 别忘了再执行①
+                // 准备关闭所有二级菜单, 注意此时的e和点击一级菜单时候的e层级不同
+                // 此处好像不能使用变量存储的menuPhone？要重新查询
+                document.querySelector('.switcher .menu-phone').childNodes.forEach(function (e2) {
+                  if (Object.prototype.toString.call(e2) == '[object HTMLLIElement]') {
+                    e2.childNodes.forEach(function (e1) {
+                      if (Object.prototype.toString.call(e1) == '[object HTMLUListElement]') {
+                        volantis.dom.$(e1).hide()
+                      }
+                    })
                   }
                 })
               }
-            })
-            // 点击展开子菜单
-            let array = e.currentTarget.children
-            for (let index = 0; index < array.length; index++) {
-              const element = array[index];
-              if (volantis.dom.$(element).title === 'menu') { // 移动端菜单栏异常  
-                volantis.dom.$(element).display = "flex"      // https://github.com/volantis-x/hexo-theme-volantis/issues/706
-              } else {
-                volantis.dom.$(element).show()
-              }
             }
+
           }, 0);
         }
       })
@@ -319,7 +370,7 @@ const VolantisApp = (() => {
     }
     fn.setPageHeaderMenuEvent();
   }
-
+  
   // 【移动端】隐藏子菜单
   fn.setPageHeaderMenuEvent = () => {
     if (!volantis.isMobile) return
@@ -437,36 +488,32 @@ const VolantisApp = (() => {
 
   // 工具类：复制字符串到剪切板
   fn.utilWriteClipText = (str) => {
-    try {
-      return navigator.clipboard
-        .writeText(str)
-        .then(() => {
-          return Promise.resolve()
-        })
-        .catch(err => {
-          return Promise.reject(err || '复制文本失败!')
-        })
-    } catch (e) {
-      const input = document.createElement('input');
-      input.setAttribute('readonly', 'readonly');
-      document.body.appendChild(input);
-      input.setAttribute('value', str);
-      input.select();
-      try {
-        let result = document.execCommand('copy')
-        document.body.removeChild(input);
-        if (!result || result === 'unsuccessful') {
-          return Promise.reject('复制文本失败!')
-        } else {
-          return Promise.resolve()
+    return navigator.clipboard
+      .writeText(str)
+      .then(() => {
+        return Promise.resolve()
+      })
+      .catch(e => {
+        const input = document.createElement('textarea');
+        input.setAttribute('readonly', 'readonly');
+        document.body.appendChild(input);
+        input.innerHTML = str;
+        input.select();
+        try {
+          let result = document.execCommand('copy')
+          document.body.removeChild(input);
+          if (!result || result === 'unsuccessful') {
+            return Promise.reject('复制文本失败!')
+          } else {
+            return Promise.resolve()
+          }
+        } catch (e) {
+          document.body.removeChild(input);
+          return Promise.reject(
+            '当前浏览器不支持复制功能，请检查更新或更换其他浏览器操作!'
+          )
         }
-      } catch (e) {
-        document.body.removeChild(input);
-        return Promise.reject(
-          '当前浏览器不支持复制功能，请检查更新或更换其他浏览器操作!'
-        )
-      }
-    }
+      })
   }
 
   // 工具类：返回时间间隔
@@ -510,8 +557,8 @@ const VolantisApp = (() => {
   // 消息提示：标准
   fn.message = (title, message, option = {}, done = null) => {
     if (typeof iziToast === "undefined") {
-      volantis.css(volantis.GLOBAL_CONFIG.cdn.css.message)
-      volantis.js(volantis.GLOBAL_CONFIG.cdn.js.message, () => {
+      volantis.css(volantis.GLOBAL_CONFIG.plugins.message.css)
+      volantis.js(volantis.GLOBAL_CONFIG.plugins.message.js, () => {
         tozashMessage(title, message, option, done);
       });
     } else {
@@ -556,8 +603,8 @@ const VolantisApp = (() => {
   // 消息提示：询问
   fn.question = (title, message, option = {}, success = null, cancel = null, done = null) => {
     if (typeof iziToast === "undefined") {
-      volantis.css(volantis.GLOBAL_CONFIG.cdn.css.message)
-      volantis.js(volantis.GLOBAL_CONFIG.cdn.js.message, () => {
+      volantis.css(volantis.GLOBAL_CONFIG.plugins.message.css)
+      volantis.js(volantis.GLOBAL_CONFIG.plugins.message.js, () => {
         tozashQuestion(title, message, option, success, cancel, done);
       });
     } else {
@@ -617,8 +664,8 @@ const VolantisApp = (() => {
     }
 
     if (typeof iziToast === "undefined") {
-      volantis.css(volantis.GLOBAL_CONFIG.cdn.css.message)
-      volantis.js(volantis.GLOBAL_CONFIG.cdn.js.message, () => {
+      volantis.css(volantis.GLOBAL_CONFIG.plugins.message.css)
+      volantis.js(volantis.GLOBAL_CONFIG.plugins.message.js, () => {
         hideMessage(done);
       });
     } else {
@@ -637,7 +684,7 @@ const VolantisApp = (() => {
     // 消息提示 复制时弹出
     if (volantis.GLOBAL_CONFIG.plugins.message.enable
       && volantis.GLOBAL_CONFIG.plugins.message.copyright.enable
-      && messageCopyrightShow < 3) {
+      && messageCopyrightShow < 1) {
       messageCopyrightShow++;
       VolantisApp.message(volantis.GLOBAL_CONFIG.plugins.message.copyright.title,
         volantis.GLOBAL_CONFIG.plugins.message.copyright.message, {
@@ -687,7 +734,8 @@ const VolantisApp = (() => {
     message: fn.message,
     question: fn.question,
     hideMessage: fn.hideMessage,
-    messageCopyright: fn.messageCopyright
+    messageCopyright: fn.messageCopyright,
+    scrolltoElement: fn.scrolltoElement
   }
 })()
 Object.freeze(VolantisApp);
@@ -808,12 +856,12 @@ Object.freeze(VolantisFancyBox);
 
 // highlightKeyWords 与 搜索功能搭配 https://github.com/next-theme/hexo-theme-next/blob/eb194a7258058302baf59f02d4b80b6655338b01/source/js/third-party/search/local-search.js
 // Question: 锚点稳定性未知
-// ToDo: 查找模式 
+// ToDo: 查找模式
 // 0. (/////////要知道浏览器自带全页面查找功能 CTRL + F)
 // 1. 右键开启查找模式 / 导航栏菜单开启?? / CTRL + F ???
 // 2. 查找模式面板 (可拖动? or 固定?)
 // 3. keyword mark id 从 0 开始编号 查找下一处 highlightKeyWords.scrollToNextHighlightKeywordMark() 查找上一处 scrollToPrevHighlightKeywordMark() 循环查找(取模%)
-// 4. 可输入修改 查找关键词 keywords(type:list) 
+// 4. 可输入修改 查找关键词 keywords(type:list)
 // 5. 区分大小写 caseSensitive (/ 全字匹配?? / 正则匹配??)
 // 6. 在选定区域中查找 querySelector ??
 // 7. 关闭查找模式
@@ -833,6 +881,7 @@ const highlightKeyWords = (() => {
     fn.scrollToFirstHighlightKeywordMark()
   }
   fn.scrollToFirstHighlightKeywordMark = () => {
+    volantis.cleanContentVisibility();
     let target = fn.scrollToNextHighlightKeywordMark("0");
     if (!target) {
       volantis.requestAnimationFrame(fn.scrollToFirstHighlightKeywordMark)
@@ -1022,6 +1071,12 @@ const DOMController = {
     })
   },
 
+  removeList: (list) => {
+    list.forEach(param => {
+      DOMController.remove(param)
+    })
+  },
+
   /**
    * 设置属性
    */
@@ -1032,6 +1087,12 @@ const DOMController = {
     })
   },
 
+  setAttributeList: (list) => {
+    list.forEach(item => {
+      DOMController.setAttribute(item[0], item[1], item[2])
+    })
+  },
+
   /**
    * 设置样式
    */
@@ -1039,6 +1100,12 @@ const DOMController = {
     const node = document.querySelectorAll(param);
     node.forEach(ele => {
       ele.style[styleName] = styleValue;
+    })
+  },
+
+  setStyleList: (list) => {
+    list.forEach(item => {
+      DOMController.setStyle(item[0], item[1], item[2])
     })
   },
 
@@ -1070,6 +1137,12 @@ const DOMController = {
     return e
   },
 
+  fadeToggleList: (list) => {
+    list.forEach(param => {
+      DOMController.fadeToggle(param)
+    })
+  },
+
   hasClass: (e, c) => {
     if (!e) return;
     return e.className.match(new RegExp('(\\s|^)' + c + '(\\s|$)'));
@@ -1095,6 +1168,56 @@ const DOMController = {
       DOMController.addClass(e, c)
     }
     return e
+  },
+
+  toggleClassList: (list) => {
+    list.forEach(item => {
+      DOMController.toggleClass(item[0], item[1])
+    })
   }
 }
 Object.freeze(DOMController);
+
+const VolantisRequest = {
+  timeoutFetch: (url, ms, requestInit) => {
+    const controller = new AbortController()
+    requestInit.signal?.addEventListener('abort', () => controller.abort())
+    let promise = fetch(url, { ...requestInit, signal: controller.signal })
+    if (ms > 0) {
+      const timer = setTimeout(() => controller.abort(), ms)
+      promise.finally(() => { clearTimeout(timer) })
+    }
+    promise = promise.catch((err) => {
+      throw ((err || {}).name === 'AbortError') ? new Error(`Fetch timeout: ${url}`) : err
+    })
+    return promise
+  },
+
+  Fetch: async (url, requestInit, timeout = 15000) => {
+    const resp = await VolantisRequest.timeoutFetch(url, timeout, requestInit);
+    if (!resp.ok) throw new Error(`Fetch error: ${url} | ${resp.status}`);
+    let json = await resp.json()
+    if (!json.success) throw json
+    return json
+  },
+
+  POST: async (url, data) => {
+    const requestInit = {
+      method: 'POST',
+    }
+    if (data) {
+      const formData = new FormData();
+      Object.keys(data).forEach(key => formData.append(key, String(data[key])))
+      requestInit.body = formData;
+    }
+    const json = await VolantisRequest.Fetch(url, requestInit)
+    return json.data;
+  },
+
+  Get: async (url, data) => {
+    const json = await VolantisRequest.Fetch(url + (data ? (`?${new URLSearchParams(data)}`) : ''), {
+      method: 'GET'
+    })
+  }
+}
+Object.freeze(VolantisRequest);
